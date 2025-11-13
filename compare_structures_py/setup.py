@@ -21,7 +21,7 @@ setup(
     description="增强版结构对比库 - 用于深度对比两个数据结构（字典/列表）",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/compare_structures",  # 可以添加 GitHub 地址
+    url="https://github.com/cuihaohao1220/compare_structures",
     packages=["compare_structures_py"],
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -41,8 +41,8 @@ setup(
     ],
     keywords="compare, diff, structure, dictionary, list, comparison",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/compare_structures/issues",
-        "Source": "https://github.com/yourusername/compare_structures",
+        "Bug Reports": "https://github.com/cuihaohao1220/compare_structures/issues",
+        "Source": "https://github.com/cuihaohao1220/compare_structures",
     },
 )
 

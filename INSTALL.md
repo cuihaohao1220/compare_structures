@@ -39,7 +39,7 @@ pip install dist/compare_structures-1.0.0-py3-none-any.whl
 
 ```bash
 # 从 GitHub 安装
-pip install git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_py
+pip install git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_py
 
 # 从本地 Git 仓库安装
 pip install git+file:///path/to/compare_structures#subdirectory=compare_structures_py
@@ -65,7 +65,7 @@ npm install .
 ### 方式2: 从 Git 仓库安装
 
 ```bash
-npm install git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_js
+npm install git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_js
 ```
 
 ### 方式3: 发布到 npm 后安装

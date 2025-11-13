@@ -53,7 +53,7 @@ diffs.forEach(diff => console.log(diff));
 
 ```txt
 # requirements.txt
-compare-structures @ git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_py
+compare-structures @ git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_py
 ```
 
 或
@@ -61,7 +61,7 @@ compare-structures @ git+https://github.com/yourusername/compare_structures.git#
 ```python
 # setup.py
 install_requires=[
-    "compare-structures @ git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_py",
+    "compare-structures @ git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_py",
 ]
 ```
 
@@ -72,7 +72,7 @@ install_requires=[
 ```json
 {
   "dependencies": {
-    "compare-structures": "git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_js"
+    "compare-structures": "git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_js"
   }
 }
 ```

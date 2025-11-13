@@ -36,7 +36,7 @@ pip install .
 #### 方式3: 从 Git 仓库安装
 
 ```bash
-pip install git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_py
+pip install git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_py
 ```
 
 #### 方式4: 打包后安装
@@ -59,7 +59,7 @@ npm install .
 #### 方式2: 从 Git 仓库安装
 
 ```bash
-npm install git+https://github.com/yourusername/compare_structures.git#subdirectory=compare_structures_js
+npm install git+https://github.com/cuihaohao1220/compare_structures.git#subdirectory=compare_structures_js
 ```
 
 #### 方式3: 发布到 npm 后安装

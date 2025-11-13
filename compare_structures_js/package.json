@@ -19,12 +19,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/compare_structures.git"
+    "url": "https://github.com/cuihaohao1220/compare_structures.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/compare_structures/issues"
+    "url": "https://github.com/cuihaohao1220/compare_structures/issues"
   },
-  "homepage": "https://github.com/yourusername/compare_structures#readme",
+  "homepage": "https://github.com/cuihaohao1220/compare_structures#readme",
   "engines": {
     "node": ">=12.0.0"
   },
