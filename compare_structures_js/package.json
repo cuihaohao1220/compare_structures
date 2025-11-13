@@ -1,0 +1,36 @@
+{
+  "name": "compare-structures",
+  "version": "1.0.0",
+  "description": "增强版结构对比库 - 用于深度对比两个数据结构（对象/数组）",
+  "main": "compare_structures_js.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "compare",
+    "diff",
+    "structure",
+    "object",
+    "array",
+    "comparison",
+    "deep-diff"
+  ],
+  "author": "崔浩浩",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/compare_structures.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/compare_structures/issues"
+  },
+  "homepage": "https://github.com/yourusername/compare_structures#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "files": [
+    "compare_structures_js.js",
+    "compare_structures_js_usage.md"
+  ]
+}
+
