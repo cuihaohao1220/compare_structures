@@ -48,7 +48,7 @@
  *   false
  * );
  */
- compareStructures = function(
+compareStructures = function(
     originData,
     currentData,
     path = "",
@@ -185,42 +185,54 @@
                     openLog
                 );
                 differences.push(...nestedDiffs);
-            } else {
-                // 值对比开启
-                if (checkValue) {
-                    // 第一步：快速等价判断（优先于类型检查，需要配置 ignore_type_in_groups）
-                    if (isEquivalentValue(originVal, currentVal, deepDiffContrastConfig)) {
-                        continue; // 跳过差异记录
-                    }
-                    
-                    // 第二步：类型冲突检查（考虑嵌套结构）
-                    if (checkType && !isSameType(originVal, currentVal, deepDiffContrastConfig)) {
-                        differences.push(
-                            `[类型冲突] ${currentPath} ` +
-                            `Origin类型: ${typeDetail(originVal)} → ` +
-                            `Current类型: ${typeDetail(currentVal)}`
-                        );
-                        continue;
-                    }
-                    
-                    // 第三步：值对比
-                    if (originVal !== currentVal) {
-                        differences.push(
-                            `[值变化] ${currentPath} ` +
-                            `Origin值: ${formatValue(originVal)} → ` +
-                            `Current值: ${formatValue(currentVal)}`
-                        );
-                    }
                 } else {
-                    // 值对比关闭时检查逻辑
-                    differences = specialValueCheck(
-                        originVal,
-                        currentVal,
-                        currentPath,
-                        differences
-                    );
+                    // 值对比开启
+                    if (checkValue) {
+                        // 第一步：快速等价判断（优先于类型检查，需要配置 ignore_type_in_groups）
+                        if (isEquivalentValue(originVal, currentVal, deepDiffContrastConfig)) {
+                            continue; // 跳过差异记录
+                        }
+                        
+                        // 第二步：类型冲突检查
+                        // 注意：字段值的类型检查（包括 dict/list）应该受 checkType 控制
+                        // 只有顶层结构类型（originData vs currentData）才始终检查
+                        if (checkType && !isSameType(originVal, currentVal, deepDiffContrastConfig)) {
+                            differences.push(
+                                `[类型冲突] ${currentPath} ` +
+                                `Origin类型: ${typeDetail(originVal)} → ` +
+                                `Current类型: ${typeDetail(currentVal)}`
+                            );
+                            continue;
+                        }
+                        
+                        // 第三步：值对比
+                        if (originVal !== currentVal) {
+                            differences.push(
+                                `[值变化] ${currentPath} ` +
+                                `Origin值: ${formatValue(originVal)} → ` +
+                                `Current值: ${formatValue(currentVal)}`
+                            );
+                        }
+                    } else {
+                        // 值对比关闭时，只进行特殊值检查（空值、零值等警告）
+                        // 注意：字段值的类型检查（包括 dict/list）应该受 checkType 控制
+                        // 只有顶层结构类型（originData vs currentData）才始终检查
+                        if (checkType && !isSameType(originVal, currentVal, deepDiffContrastConfig)) {
+                            differences.push(
+                                `[类型冲突] ${currentPath} ` +
+                                `Origin类型: ${typeDetail(originVal)} → ` +
+                                `Current类型: ${typeDetail(currentVal)}`
+                            );
+                        }
+                        // 特殊值检查（空值、零值等警告，但不检查常规值变化）
+                        differences = specialValueCheck(
+                            originVal,
+                            currentVal,
+                            currentPath,
+                            differences
+                        );
+                    }
                 }
-            }
         }
 
         // 冗余字段检查
@@ -280,6 +292,20 @@
                 openLog
             );
         } else {
+            // 首先检查列表长度差异
+            // 注意：只有顶层列表（path === ""）才检查长度差异，嵌套列表不检查
+            const isTopLevel = (path === "");
+            if (isTopLevel && originList.length !== currentList.length) {
+                // 检查路径是否在排除字段中
+                if (!shouldExclude(path, excludeFields)) {
+                    differences.push(
+                        `[列表长度差异] ${path} ` +
+                        `Origin长度: ${originList.length} → ` +
+                        `Current长度: ${currentList.length}`
+                    );
+                }
+            }
+            
             // 不检查值时需要校验字段是否非空
             const minLen = Math.min(originList.length, currentList.length);
             for (let i = 0; i < minLen; i++) {
@@ -308,6 +334,8 @@
                     );
 
                     // 基础类型对比
+                    // 注意：列表元素的类型检查（包括 dict/list）应该受 checkType 控制
+                    // 只有顶层结构类型（originData vs currentData）才始终检查
                     if (checkType && !isSameType(originList[i], currentList[i], deepDiffContrastConfig)) {
                         differences.push(
                             `[类型冲突] ${elemPath} ` +
@@ -758,16 +786,37 @@
                 if (i >= cleanParts.length) {
                     break;
                 }
-                // 检查当前部分是否以 [*] 结尾，若是则表示使用了通配符
-                if (part.endsWith('[*]')) {
-                    // 提取 [*] 之前的基础部分
-                    const base = part.slice(0, -3);
-                    // 若 cleanPath 对应部分与基础部分不匹配，标记为不匹配
-                    if (cleanParts[i] !== base) {
+                const cleanPart = cleanParts[i];
+                
+                // 检查当前部分是否完全等于 [*]，若是则匹配任何包含 [数字] 的部分
+                if (part === '[*]') {
+                    // 检查 cleanPath 对应部分是否包含 [数字] 格式（可以是 [3] 或 rows[3] 等）
+                    if (!/\[\d+\]/.test(cleanPart)) {
                         match = false;
                         break;
                     }
-                } else if (part !== cleanParts[i]) {
+                }
+                // 检查当前部分是否以 [*] 结尾，若是则表示使用了通配符（如 "list[*]"）
+                else if (part.endsWith('[*]')) {
+                    // 提取 [*] 之前的基础部分
+                    const base = part.slice(0, -3);
+                    // 检查 cleanPath 对应部分是否以 base 开头，并且后面是 [数字] 格式
+                    if (cleanPart.startsWith(base + '[')) {
+                        // 检查是否匹配 [数字] 格式
+                        // 转义 base 中的特殊字符
+                        const escapedBase = base.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp('^' + escapedBase + '\\[\\d+\\]$');
+                        if (!regex.test(cleanPart)) {
+                            match = false;
+                            break;
+                        }
+                    } else {
+                        // cleanPart 必须包含 base 和 [数字]，不能只是 base
+                        // 例如：category[*] 应该匹配 category[0]，但不匹配 category
+                        match = false;
+                        break;
+                    }
+                } else if (part !== cleanPart) {
                     // 若当前部分不以 [*] 结尾，直接检查是否与 cleanPath 对应部分不匹配
                     match = false;
                     break;
@@ -834,6 +883,7 @@
 
     /**
      * 统一特殊值检查函数
+     * 注意：此函数在 checkValue=false 时被调用，只检查特殊值（空值、零值等），不检查常规值变化
      * @param {*} originVal - Origin值
      * @param {*} currentVal - Current值
      * @param {string} path - 路径
@@ -841,9 +891,18 @@
      * @returns {Array<string>} 差异列表
      */
     function specialValueCheck(originVal, currentVal, path, differences) {
-        // 类型分流检查
-        if (typeof originVal === 'string' && typeof currentVal === 'string') {
-            // 字符串空值检查
+        // 类型分流检查（注意：布尔值需要先检查）
+        if (typeof originVal === 'boolean' && typeof currentVal === 'boolean') {
+            // 布尔值变化检查（特殊值检查，因为布尔值变化通常很重要）
+            if (originVal !== currentVal) {
+                differences.push(
+                    `[值变化] ${path} ` +
+                    `Origin值: ${originVal} → ` +
+                    `Current值: ${currentVal}`
+                );
+            }
+        } else if (typeof originVal === 'string' && typeof currentVal === 'string') {
+            // 字符串空值检查（特殊值检查）
             if (originVal.trim() !== '' && currentVal.trim() === '') {
                 differences.push(
                     `[值变化] ${path} ` +
@@ -851,14 +910,31 @@
                     `Current值: '${truncate(currentVal, 30)}' (空值警告)`
                 );
             }
+            // 注意：不检查常规字符串值变化，因为 checkValue=false
         } else if (typeof originVal === 'number' && typeof currentVal === 'number') {
-            // 整数值合法性检查
-            if (originVal !== currentVal && currentVal <= 0) {
-                differences.push(
-                    `[值变化] ${path} ` +
-                    `Origin值: ${originVal} → ` +
-                    `Current值: ${currentVal} (负数/零警告)`
-                );
+            // 数值类型检查（只检查特殊值：负数、零值等）
+            if (Number.isInteger(originVal) && Number.isInteger(currentVal)) {
+                // 整数值合法性检查（特殊值检查：负数/零值）
+                if (originVal !== currentVal && currentVal <= 0) {
+                    differences.push(
+                        `[值变化] ${path} ` +
+                        `Origin值: ${originVal} → ` +
+                        `Current值: ${currentVal} (负数/零警告)`
+                    );
+                }
+                // 注意：不检查常规整数值变化，因为 checkValue=false
+            } else {
+                // 浮点数或混合数值类型变化检查（只检查零值）
+                if (originVal !== currentVal) {
+                    if (currentVal === 0 || currentVal === 0.0) {
+                        differences.push(
+                            `[值变化] ${path} ` +
+                            `Origin值: ${originVal} → ` +
+                            `Current值: ${currentVal} (零值警告)`
+                        );
+                    }
+                    // 注意：不检查常规数值变化，因为 checkValue=false
+                }
             }
         }
 
@@ -993,6 +1069,27 @@
                 return true;
             }
         }
+        // 注意：在 JavaScript 中，typeof [] 和 typeof {} 都返回 "object"
+        // 需要区分对象和数组
+        const originIsObject = originVal !== null && typeof originVal === 'object' && !Array.isArray(originVal);
+        const currentIsObject = currentVal !== null && typeof currentVal === 'object' && !Array.isArray(currentVal);
+        const originIsArray = Array.isArray(originVal);
+        const currentIsArray = Array.isArray(currentVal);
+        
+        // 如果一个是对象，一个是数组，类型不同
+        if ((originIsObject && currentIsArray) || (originIsArray && currentIsObject)) {
+            return false;
+        }
+        
+        // 如果都是对象或都是数组，检查是否相同
+        if (originIsObject && currentIsObject) {
+            return true;
+        }
+        if (originIsArray && currentIsArray) {
+            return true;
+        }
+        
+        // 其他类型使用 typeof 比较
         return typeof originVal === typeof currentVal;
     }
 
@@ -1112,6 +1209,23 @@
         // ignore_type_in_groups: [['number', 'string', 'boolean']],
     };
 
+    // 处理null值特殊情况（必须在类型检查之前）
+    if (originData === null && currentData === null) {
+        return differences;
+    }
+    if (originData === null) {
+        if (checkMissing) {
+            differences.push(`[字段缺失] ${path} (Origin类型: null)`);
+        }
+        return differences;
+    }
+    if (currentData === null) {
+        if (checkRedundant) {
+            differences.push(`[冗余字段] ${path} (Current类型: null)`);
+        }
+        return differences;
+    }
+
     // 深拷贝数据以避免修改原始数据
     const originDataCopy = deepCopy(originData);
     const currentDataCopy = deepCopy(currentData);
@@ -1122,23 +1236,6 @@
         if (!isDictOrList(originDataCopy) || !isDictOrList(currentDataCopy)) {
             throw new Error('Origin和Current数据必须是字典或列表类型');
         }
-    }
-
-    // 处理null值特殊情况
-    if (originDataCopy === null && currentDataCopy === null) {
-        return differences;
-    }
-    if (originDataCopy === null) {
-        if (checkMissing) {
-            differences.push(`[字段缺失] ${path} (Origin类型: null)`);
-        }
-        return differences;
-    }
-    if (currentDataCopy === null) {
-        if (checkRedundant) {
-            differences.push(`[冗余字段] ${path} (Current类型: null)`);
-        }
-        return differences;
     }
 
     // 主对比逻辑
@@ -1172,7 +1269,13 @@
         );
     } else {
         // originData和currentData类型不一致
-        if (checkType && !isSameType(originDataCopy, currentDataCopy, deepDiffContrastConfig)) {
+        // 注意：只有顶层结构类型（path == ""）才始终检查，不受 checkType 参数影响
+        // 嵌套结构中的类型检查应该受 checkType 控制
+        // 但需要考虑 deepDiffContrastConfig 中的 ignore_type_in_groups 配置
+        const isTopLevel = (path === "");
+        const shouldCheckStructureType = isTopLevel || checkType;
+        
+        if (shouldCheckStructureType && !isSameType(originDataCopy, currentDataCopy, deepDiffContrastConfig)) {
             differences.push(
                 `[类型冲突] ${path} ` +
                 `Origin类型: ${typeDetail(originDataCopy)} → ` +

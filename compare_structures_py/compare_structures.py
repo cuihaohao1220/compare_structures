@@ -100,13 +100,15 @@ def compare_structures(
                     open_log,
                 )
             else:
-                # 值对开启
+                # 值对比开启
                 if check_value:
                     # 第一步：快速等价判断（优先于类型检查，需要配置 ignore_type_in_groups）
                     if _is_equivalent_value(origin_val, current_val, deep_diff_contrast_config):
                         continue  # 跳过差异记录
-
-                    # 第二步：类型冲突检查（考虑嵌套结构）
+                    
+                    # 第二步：类型冲突检查
+                    # 注意：字段值的类型检查（包括 dict/list）应该受 check_type 控制
+                    # 只有顶层结构类型（origin_data vs current_data）才始终检查
                     if check_type and not _is_same_type(
                         origin_val, current_val, deep_diff_contrast_config
                     ):
@@ -116,7 +118,7 @@ def compare_structures(
                             f"Current类型: {_type_detail(current_val)}"
                         )
                         continue
-
+                    
                     # 第三步：值对比
                     if origin_val != current_val:
                         differences.append(
@@ -126,7 +128,16 @@ def compare_structures(
                         )
                 # 值对比关闭
                 else:
-                    # 当关闭值对比时检查逻辑
+                    # 当关闭值对比时，只进行特殊值检查（空值、零值等警告）
+                    # 注意：字段值的类型检查（包括 dict/list）应该受 check_type 控制
+                    # 只有顶层结构类型（origin_data vs current_data）才始终检查
+                    if check_type and not _is_same_type(origin_val, current_val, deep_diff_contrast_config):
+                        differences.append(
+                            f"[类型冲突] {current_path} "
+                            f"Origin类型: {_type_detail(origin_val)} → "
+                            f"Current类型: {_type_detail(current_val)}"
+                        )
+                    # 特殊值检查（空值、零值等警告，但不检查常规值变化）
                     differences = _special_value_check(
                         origin_val, current_val, current_path, differences
                     )
@@ -171,6 +182,18 @@ def compare_structures(
             )
         # 值对比关闭
         else:
+            # 首先检查列表长度差异
+            # 注意：只有顶层列表（path == ""）才检查长度差异，嵌套列表不检查
+            is_top_level = (path == "")
+            if is_top_level and len(origin_list) != len(current_list):
+                # 检查路径是否在排除字段中
+                if not _should_exclude(path, exclude_fields):
+                    differences.append(
+                        f"[列表长度差异] {path} "
+                        f"Origin长度: {len(origin_list)} → "
+                        f"Current长度: {len(current_list)}"
+                    )
+            
             # 不检查值时需要校验字段是否非空
             for i in range(min(len(origin_list), len(current_list))):
                 elem_path = f"{path}[{i}]"
@@ -194,6 +217,8 @@ def compare_structures(
                     )
 
                     # 基础类型对比
+                    # 注意：列表元素的类型检查（包括 dict/list）应该受 check_type 控制
+                    # 只有顶层结构类型（origin_data vs current_data）才始终检查
                     if check_type and not _is_same_type(
                         origin_list[i], current_list[i], deep_diff_contrast_config
                     ):
@@ -222,19 +247,19 @@ def compare_structures(
                 f"_compare_lists_native: path={path}, "
                 f"origin_len={len(origin_list)}, current_len={len(current_list)}"
             )
-
+        
         ignore_order = deep_diff_contrast_config.get("ignore_order", True)
-
+        
         # 如果忽略顺序，需要特殊处理
         if ignore_order:
             # 创建副本以避免修改原始数据
             origin_list_copy = deepcopy(origin_list)
             current_list_copy = deepcopy(current_list)
-
+            
             # 记录匹配关系：origin_index -> current_index
             origin_matched = {}  # {origin_index: current_index}
             current_matched = set()  # 已匹配的current索引
-
+            
             # 第一遍：精确匹配并记录匹配关系
             for i, origin_item in enumerate(origin_list_copy):
                 for j, current_item in enumerate(current_list_copy):
@@ -245,7 +270,7 @@ def compare_structures(
                         origin_matched[i] = j
                         current_matched.add(j)
                         break
-
+            
             # 记录未匹配的元素
             for i in range(len(origin_list_copy)):
                 if i not in origin_matched:
@@ -256,7 +281,7 @@ def compare_structures(
                     differences.append(
                         f"[列表差异] {elem_path} (iterable_item_removed)"
                     )
-
+            
             for j in range(len(current_list_copy)):
                 if j not in current_matched:
                     elem_path = f"{path}[{j}]"
@@ -266,17 +291,17 @@ def compare_structures(
                     differences.append(
                         f"[列表差异] {elem_path} (iterable_item_added)"
                     )
-
+            
             # 对于已匹配的元素，递归对比（使用原始索引路径）
             # 优化：即使元素在_items_match中匹配了，也要深入递归对比内部结构
             for orig_idx, curr_idx in origin_matched.items():
                 elem_path = f"{path}[{orig_idx}]"
                 if _should_exclude(elem_path, exclude_fields):
                     continue
-
+                
                 origin_item = origin_list_copy[orig_idx]
                 current_item = current_list_copy[curr_idx]
-
+                
                 # 优化：对于复杂类型（dict/list），总是进行递归对比，即使_items_match返回True
                 # 这样可以检测到内部字段的细微差异
                 if isinstance(origin_item, (dict, list)) and isinstance(current_item, (dict, list)):
@@ -313,7 +338,7 @@ def compare_structures(
                     # 第一步：检查等价值（优先于类型检查，需要配置 ignore_type_in_groups）
                     if _is_equivalent_value(origin_item, current_item, deep_diff_contrast_config):
                         continue  # 跳过差异记录
-
+                    
                     # 第二步：类型冲突检查
                     if check_type and not _is_same_type(origin_item, current_item, deep_diff_contrast_config):
                         differences.append(
@@ -337,26 +362,26 @@ def compare_structures(
             max_len = max(len(origin_list), len(current_list))
             for i in range(max_len):
                 elem_path = f"{path}[{i}]"
-
+                
                 # 检查是否在排除字段中
                 if _should_exclude(elem_path, exclude_fields):
                     continue
-
+                
                 if i >= len(origin_list):
                     differences.append(
                         f"[列表差异] {elem_path} (iterable_item_added)"
                     )
                     continue
-
+                
                 if i >= len(current_list):
                     differences.append(
                         f"[列表差异] {elem_path} (iterable_item_removed)"
                     )
                     continue
-
+                
                 origin_item = origin_list[i]
                 current_item = current_list[i]
-
+                
                 # 递归对比
                 if isinstance(origin_item, (dict, list)) and isinstance(current_item, (dict, list)):
                     differences += compare_structures(
@@ -376,7 +401,7 @@ def compare_structures(
                     # 第一步：检查等价值（优先于类型检查，需要配置 ignore_type_in_groups）
                     if _is_equivalent_value(origin_item, current_item, deep_diff_contrast_config):
                         continue  # 跳过差异记录
-
+                    
                     # 第二步：类型冲突检查
                     if check_type and not _is_same_type(origin_item, current_item, deep_diff_contrast_config):
                         differences.append(
@@ -395,9 +420,9 @@ def compare_structures(
                         differences.append(
                             f"[值变化] {elem_path} Origin值: {old_formatted} → Current值: {new_formatted}"
                         )
-
+        
         return differences
-
+    
     def _items_match(
         origin_item: Any,
         current_item: Any,
@@ -410,7 +435,7 @@ def compare_structures(
         # 类型检查
         if check_type and not _is_same_type(origin_item, current_item, deep_diff_contrast_config):
             return False
-
+        
         # 基本类型直接比较
         if not isinstance(origin_item, (dict, list)) and not isinstance(current_item, (dict, list)):
             # 检查类型转换
@@ -418,7 +443,7 @@ def compare_structures(
                 if _type_conversion_judgment(origin_item, current_item, deep_diff_contrast_config):
                     return True
             return origin_item == current_item
-
+        
         # 复杂类型需要深度比较
         if isinstance(origin_item, dict) and isinstance(current_item, dict):
             if len(origin_item) != len(current_item):
@@ -429,7 +454,7 @@ def compare_structures(
                 if not _items_match(origin_item[key], current_item[key], check_type, deep_diff_contrast_config):
                     return False
             return True
-
+        
         if isinstance(origin_item, list) and isinstance(current_item, list):
             if len(origin_item) != len(current_item):
                 return False
@@ -438,7 +463,7 @@ def compare_structures(
                 if not _items_match(orig_elem, curr_elem, check_type, deep_diff_contrast_config):
                     return False
             return True
-
+        
         return False
 
     def _should_exclude(clean_path: str, exclude_fields: Set[str]) -> bool:
@@ -469,12 +494,26 @@ def compare_structures(
                 # 若已遍历完 clean_path 的所有部分，跳出循环
                 if i >= len(clean_parts):
                     break
-                # 检查当前部分是否以 [*] 结尾，若是则表示使用了通配符
-                if part.endswith("[*]"):
+                # 检查当前部分是否完全等于 [*]，若是则匹配任何包含 [数字] 的部分
+                if part == "[*]":
+                    # 检查 clean_path 对应部分是否包含 [数字] 格式（可以是 [3] 或 rows[3] 等）
+                    if not re.search(r'\[\d+\]', clean_parts[i]):
+                        match = False
+                        break
+                # 检查当前部分是否以 [*] 结尾，若是则表示使用了通配符（如 "list[*]"）
+                elif part.endswith("[*]"):
                     # 提取 [*] 之前的基础部分
                     base = part[:-3]
-                    # 若 clean_path 对应部分与基础部分不匹配，标记为不匹配
-                    if clean_parts[i] != base:
+                    # 检查 clean_path 对应部分是否以 base 开头，并且后面是 [数字] 格式
+                    clean_part = clean_parts[i]
+                    if clean_part.startswith(base + "["):
+                        # 检查是否匹配 [数字] 格式
+                        if not re.match(r'^' + re.escape(base) + r'\[\d+\]$', clean_part):
+                            match = False
+                            break
+                    else:
+                        # clean_part 必须包含 base 和 [数字]，不能只是 base
+                        # 例如：category[*] 应该匹配 category[0]，但不匹配 category
                         match = False
                         break
                 # 若当前部分不以 [*] 结尾，直接检查是否与 clean_path 对应部分不匹配
@@ -490,21 +529,21 @@ def compare_structures(
     def _type_conversion_judgment(old_value: Any, new_value: Any, deep_diff_contrast_config: Dict) -> bool:
         """
         类型转换判断逻辑
-
+        
         Returns:
             bool: 如果应该跳过类型检查返回 True，否则返回 False
         """
         type_groups = deep_diff_contrast_config.get("ignore_type_in_groups", [])
         if not type_groups:
             return False
-
+        
         old_type = type(old_value)
         new_type = type(new_value)
-
+        
         # 如果类型相同，不需要转换判断
         if old_type == new_type:
             return False
-
+        
         for group in type_groups:
             if old_type in group and new_type in group:
                 try:
@@ -523,31 +562,57 @@ def compare_structures(
                         return float(old_value) == new_value
                 except (ValueError, TypeError):
                     continue
-
+        
         return False  # 默认返回 False
 
     def _special_value_check(
         origin_val: Any, current_val: Any, path: str, differences: List[str]
     ) -> List[str]:
-        """统一特殊值检查函数"""
-        # 类型分流检查
-        if isinstance(origin_val, str) and isinstance(current_val, str):
-            # 字符串空值检查
+        """
+        统一特殊值检查函数
+        注意：此函数在 check_value=False 时被调用，只检查特殊值（空值、零值等），不检查常规值变化
+        """
+        # 类型分流检查（注意：布尔值需要先检查，因为 isinstance(True, int) 返回 True）
+        if isinstance(origin_val, bool) and isinstance(current_val, bool):
+            # 布尔值变化检查（特殊值检查，因为布尔值变化通常很重要）
+            if origin_val != current_val:
+                differences.append(
+                    f"[值变化] {path} "
+                    f"Origin值: {origin_val} → "
+                    f"Current值: {current_val}"
+                )
+        
+        elif isinstance(origin_val, str) and isinstance(current_val, str):
+            # 字符串空值检查（特殊值检查）
             if origin_val.strip() != "" and current_val.strip() == "":
                 differences.append(
                     f"[值变化] {path} "
                     f"Origin值: '{_truncate(origin_val, 30)}' → "
                     f"Current值: '{_truncate(current_val, 30)}' (空值警告)"
                 )
+            # 注意：不检查常规字符串值变化，因为 check_value=False
 
-        elif isinstance(origin_val, int) and isinstance(current_val, int):
-            # 整数值合法性检查
-            if origin_val != current_val and current_val <= 0:
-                differences.append(
-                    f"[值变化] {path} "
-                    f"Origin值: {origin_val} → "
-                    f"Current值: {current_val} (负数/零警告)"
-                )
+        elif isinstance(origin_val, (int, float)) and isinstance(current_val, (int, float)):
+            # 数值类型检查（只检查特殊值：负数、零值等）
+            if isinstance(origin_val, int) and isinstance(current_val, int):
+                # 整数值合法性检查（特殊值检查：负数/零值）
+                if origin_val != current_val and current_val <= 0:
+                    differences.append(
+                        f"[值变化] {path} "
+                        f"Origin值: {origin_val} → "
+                        f"Current值: {current_val} (负数/零警告)"
+                    )
+                # 注意：不检查常规整数值变化，因为 check_value=False
+            else:
+                # 浮点数或混合数值类型变化检查（只检查零值）
+                if origin_val != current_val:
+                    if (isinstance(current_val, float) and current_val == 0.0) or (isinstance(current_val, int) and current_val == 0):
+                        differences.append(
+                            f"[值变化] {path} "
+                            f"Origin值: {origin_val} → "
+                            f"Current值: {current_val} (零值警告)"
+                        )
+                    # 注意：不检查常规数值变化，因为 check_value=False
 
         return differences
 
@@ -561,29 +626,29 @@ def compare_structures(
         type_groups = deep_diff_contrast_config.get("ignore_type_in_groups", []) if deep_diff_contrast_config else []
         if not type_groups or len(type_groups) == 0:
             return False
-
+        
         # 检查类型是否在配置的类型组中
         origin_type = type(origin_val)
         current_type = type(current_val)
-
+        
         # 判断两个类型是否在同一个类型组中
         types_in_same_group = False
         for group in type_groups:
             if not isinstance(group, (list, tuple)):
                 continue
-
+            
             # 检查类型是否在组中
             origin_in_group = origin_type in group
             current_in_group = current_type in group
-
+            
             if origin_in_group and current_in_group:
                 types_in_same_group = True
                 break
-
+        
         # 如果类型不在同一个类型组中，不进行等价值判断
         if not types_in_same_group:
             return False
-
+        
         # 空字符串与0等价（需要配置了 number 和 string 类型组）
         if (origin_val == "" and current_val == 0) or (
             origin_val == 0 and current_val == ""
@@ -603,7 +668,7 @@ def compare_structures(
             and isinstance(origin_val, (int, float))
         ):
             return int(current_val) == origin_val
-
+        
         # 浮点数字符串与数字等价
         if isinstance(origin_val, str) and isinstance(current_val, (int, float)):
             try:
@@ -695,18 +760,7 @@ def compare_structures(
         # 'ignore_type_in_groups': [(int, str, float, bool)],
     }
 
-    origin_data = deepcopy(origin_data)
-    current_data = deepcopy(current_data)
-
-    # 判断是否是第一次进入函数
-    if not path:
-        # 检查origin_data和current_data是否为字典和列表类型
-        if not isinstance(origin_data, (dict, list)) or not isinstance(
-            current_data, (dict, list)
-        ):
-            raise ValueError("Origin和Current数据必须是字典或列表类型")
-
-    # 处理null值特殊情况
+    # 处理null值特殊情况（必须在类型检查之前）
     if origin_data is None and current_data is None:
         return differences
     if origin_data is None:
@@ -717,6 +771,17 @@ def compare_structures(
         if check_redundant:
             differences.append(f"[冗余字段] {path} (Current类型: null)")
         return differences
+
+    origin_data = deepcopy(origin_data)
+    current_data = deepcopy(current_data)
+
+    # 判断是否是第一次进入函数
+    if not path:
+        # 检查origin_data和current_data是否为字典和列表类型
+        if not isinstance(origin_data, (dict, list)) or not isinstance(
+            current_data, (dict, list)
+        ):
+            raise ValueError("Origin和Current数据必须是字典或列表类型")
 
     # 主对比逻辑
     if isinstance(origin_data, dict) and isinstance(current_data, dict):
@@ -749,9 +814,13 @@ def compare_structures(
         )
     else:
         # origin_data和current_data类型不一致
-        if check_type and not _is_same_type(
-            origin_data, current_data, deep_diff_contrast_config
-        ):
+        # 注意：只有顶层结构类型（path == ""）才始终检查，不受 check_type 参数影响
+        # 嵌套结构中的类型检查应该受 check_type 控制
+        # 但需要考虑 deep_diff_contrast_config 中的 ignore_type_in_groups 配置
+        is_top_level = (path == "")
+        should_check_structure_type = is_top_level or check_type
+        
+        if should_check_structure_type and not _is_same_type(origin_data, current_data, deep_diff_contrast_config):
             differences.append(
                 f"[类型冲突] {path} "
                 f"Origin类型: {_type_detail(origin_data)} → "
@@ -762,7 +831,7 @@ def compare_structures(
 
 def main():
     """
-    主函数：处理输入参数并执行核心逻辑 并返回结果 结果为json格式
+    主函数：处理输入参数并执行核心逻辑 并返回结果 结果为json格式 从 Apifox 获取输入参数
     参数：
     - origin_data: 原始数据 字典格式
     - current_data: 当前数据 字典格式
@@ -774,7 +843,7 @@ def main():
     - deep_diff_contrast_config: 对比配置 字典格式 (可选，默认None)
     - open_log: 是否开启日志 布尔值 (可选，默认False)
     - path: 当前路径 字符串 (可选，默认"")
-
+    
     返回：JSON格式字符串，包含差异列表
     """
     try:
@@ -791,11 +860,11 @@ def main():
             }
             print(json.dumps(result, ensure_ascii=False))
             return
-
+        
         # 提取必需参数
         origin_data = params.get("origin_data")
         current_data = params.get("current_data")
-
+        
         if origin_data is None or current_data is None:
             result = {
                 "success": False,
@@ -804,7 +873,7 @@ def main():
             }
             print(json.dumps(result, ensure_ascii=False))
             return
-
+        
         # 提取可选参数并设置默认值
         check_value = params.get("check_value", True)
         check_missing = params.get("check_missing", True)
@@ -814,7 +883,7 @@ def main():
         deep_diff_contrast_config = params.get("deep_diff_contrast_config")
         open_log = params.get("open_log", False)
         path = params.get("path", "")
-
+        
         # 类型转换：exclude_fields 从列表转换为集合
         if exclude_fields is not None:
             if isinstance(exclude_fields, list):
@@ -823,7 +892,7 @@ def main():
                 pass  # 已经是集合，无需转换
             else:
                 exclude_fields = set([exclude_fields])  # 单个字符串转换为集合
-
+        
         # 调用 compare_structures 函数
         differences = compare_structures(
             origin_data=origin_data,
@@ -837,7 +906,7 @@ def main():
             deep_diff_contrast_config=deep_diff_contrast_config,
             open_log=open_log,
         )
-
+        
         # 构建返回结果
         result = {
             "success": True,
@@ -845,10 +914,10 @@ def main():
             "difference_count": len(differences),
             "is_identical": len(differences) == 0
         }
-
+        
         # 输出JSON格式结果（Apifox会读取标准输出）
         print(json.dumps(result, ensure_ascii=False, indent=2))
-
+        
     except json.JSONDecodeError as e:
         result = {
             "success": False,
