@@ -18,6 +18,7 @@ def compare_structures(
     exclude_fields: Set[str] = None,
     deep_diff_contrast_config: Dict = None,
     open_log: bool = False,
+    check_top_level_list_length: bool = False,
 ) -> List[str]:
     """
     增强版结构对比函数（Python原生实现）
@@ -31,6 +32,7 @@ def compare_structures(
     :param exclude_fields: 排除字段白名单
     :param deep_diff_contrast_config: 对比配置参数
     :param open_log: 开启日志，默认关闭
+    :param check_top_level_list_length: 是否在 check_value=False 时检查根列表长度差异，默认 False
     :return: 差异列表
     作者:崔浩浩
     功能
@@ -64,6 +66,7 @@ def compare_structures(
         deep_diff_contrast_config: Dict,
         differences: List[str],
         open_log: bool,
+        check_top_level_list_length: bool,
     ) -> List[str]:
         """处理字典类型对比"""
         # 检查Origin字段
@@ -98,6 +101,7 @@ def compare_structures(
                     exclude_fields,
                     deep_diff_contrast_config,
                     open_log,
+                    check_top_level_list_length,
                 )
             else:
                 # 值对比开启
@@ -166,6 +170,7 @@ def compare_structures(
         deep_diff_contrast_config: Dict,
         differences: List[str],
         open_log: bool,
+        check_top_level_list_length: bool,
     ) -> List[str]:
         """列表对比逻辑"""
         # 值对比开启
@@ -182,10 +187,14 @@ def compare_structures(
             )
         # 值对比关闭
         else:
-            # 首先检查列表长度差异
+            # 首先检查列表长度差异（仅当显式开启时）
             # 注意：只有顶层列表（path == ""）才检查长度差异，嵌套列表不检查
             is_top_level = (path == "")
-            if is_top_level and len(origin_list) != len(current_list):
+            if (
+                check_top_level_list_length
+                and is_top_level
+                and len(origin_list) != len(current_list)
+            ):
                 # 检查路径是否在排除字段中
                 if not _should_exclude(path, exclude_fields):
                     differences.append(
@@ -209,6 +218,7 @@ def compare_structures(
                         exclude_fields,
                         deep_diff_contrast_config,
                         open_log,
+                        check_top_level_list_length,
                     )
                 else:
                     # 当关闭值对比时检查逻辑
@@ -316,6 +326,7 @@ def compare_structures(
                         exclude_fields,
                         deep_diff_contrast_config,
                         open_log,
+                        check_top_level_list_length,
                     )
                 elif isinstance(origin_item, dict) or isinstance(current_item, dict):
                     # 如果一个是dict另一个不是，说明类型不匹配
@@ -395,6 +406,7 @@ def compare_structures(
                         exclude_fields,
                         deep_diff_contrast_config,
                         open_log,
+                        check_top_level_list_length,
                     )
                 else:
                     # 基础类型对比
@@ -797,6 +809,7 @@ def compare_structures(
             deep_diff_contrast_config,
             differences,
             open_log,
+            check_top_level_list_length,
         )
     elif isinstance(origin_data, list) and isinstance(current_data, list):
         return _compare_lists(
@@ -811,6 +824,7 @@ def compare_structures(
             deep_diff_contrast_config,
             differences,
             open_log,
+            check_top_level_list_length,
         )
     else:
         # origin_data和current_data类型不一致
@@ -842,6 +856,7 @@ def main():
     - exclude_fields: 排除字段 列表格式，会被转换为集合 (可选，默认None)
     - deep_diff_contrast_config: 对比配置 字典格式 (可选，默认None)
     - open_log: 是否开启日志 布尔值 (可选，默认False)
+    - check_top_level_list_length: check_value 为 False 时是否检查根列表长度 布尔值 (可选，默认False)
     - path: 当前路径 字符串 (可选，默认"")
     
     返回：JSON格式字符串，包含差异列表
@@ -882,6 +897,7 @@ def main():
         exclude_fields = params.get("exclude_fields")
         deep_diff_contrast_config = params.get("deep_diff_contrast_config")
         open_log = params.get("open_log", False)
+        check_top_level_list_length = params.get("check_top_level_list_length", False)
         path = params.get("path", "")
         
         # 类型转换：exclude_fields 从列表转换为集合
@@ -905,6 +921,7 @@ def main():
             exclude_fields=exclude_fields,
             deep_diff_contrast_config=deep_diff_contrast_config,
             open_log=open_log,
+            check_top_level_list_length=check_top_level_list_length,
         )
         
         # 构建返回结果

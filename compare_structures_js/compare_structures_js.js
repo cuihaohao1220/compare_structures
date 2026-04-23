@@ -31,6 +31,7 @@
  * @param {Set<string>|Array<string>|null} [excludeFields=null] - 排除字段白名单
  * @param {Object|null} [deepDiffContrastConfig=null] - 对比配置参数
  * @param {boolean} [openLog=false] - 开启日志，默认关闭
+ * @param {boolean} [checkTopLevelListLength=false] - checkValue 为 false 时是否检查根列表长度差异
  * 
  * @returns {Array<string>} 差异列表
  * 
@@ -45,6 +46,7 @@
  *   true,
  *   new Set(["timestamp"]),
  *   { ignore_order: true },
+ *   false,
  *   false
  * );
  */
@@ -58,7 +60,8 @@ compareStructures = function(
     checkType = true,
     excludeFields = null,
     deepDiffContrastConfig = null,
-    openLog = false
+    openLog = false,
+    checkTopLevelListLength = false
 ) {
     // ==================== 内部辅助函数定义开始 ====================
 
@@ -111,6 +114,7 @@ compareStructures = function(
      * @param {Object} deepDiffContrastConfig - 对比配置
      * @param {Array<string>} differences - 差异列表
      * @param {boolean} openLog - 是否开启日志
+     * @param {boolean} checkTopLevelListLength - checkValue 为 false 时是否检查根列表长度
      * @returns {Array<string>} 差异列表
      */
     function compareDicts(
@@ -124,7 +128,8 @@ compareStructures = function(
         excludeFields,
         deepDiffContrastConfig,
         differences,
-        openLog
+        openLog,
+        checkTopLevelListLength
     ) {
         // 检查Origin字段
         for (const key in originDict) {
@@ -182,7 +187,8 @@ compareStructures = function(
                     checkType,
                     excludeFields,
                     deepDiffContrastConfig,
-                    openLog
+                    openLog,
+                    checkTopLevelListLength
                 );
                 differences.push(...nestedDiffs);
                 } else {
@@ -264,6 +270,7 @@ compareStructures = function(
      * @param {Object} deepDiffContrastConfig - 对比配置
      * @param {Array<string>} differences - 差异列表
      * @param {boolean} openLog - 是否开启日志
+     * @param {boolean} checkTopLevelListLength - checkValue 为 false 时是否检查根列表长度
      * @returns {Array<string>} 差异列表
      */
     function compareLists(
@@ -277,7 +284,8 @@ compareStructures = function(
         excludeFields,
         deepDiffContrastConfig,
         differences,
-        openLog
+        openLog,
+        checkTopLevelListLength
     ) {
         // 值对比开启
         if (checkValue) {
@@ -292,10 +300,14 @@ compareStructures = function(
                 openLog
             );
         } else {
-            // 首先检查列表长度差异
+            // 首先检查列表长度差异（仅当显式开启时）
             // 注意：只有顶层列表（path === ""）才检查长度差异，嵌套列表不检查
             const isTopLevel = (path === "");
-            if (isTopLevel && originList.length !== currentList.length) {
+            if (
+                checkTopLevelListLength &&
+                isTopLevel &&
+                originList.length !== currentList.length
+            ) {
                 // 检查路径是否在排除字段中
                 if (!shouldExclude(path, excludeFields)) {
                     differences.push(
@@ -321,7 +333,8 @@ compareStructures = function(
                         checkType,
                         excludeFields,
                         deepDiffContrastConfig,
-                        openLog
+                        openLog,
+                        checkTopLevelListLength
                     );
                     differences.push(...nestedDiffs);
                 } else {
@@ -482,7 +495,8 @@ compareStructures = function(
                         checkType,
                         excludeFields,
                         deepDiffContrastConfig,
-                        openLog
+                        openLog,
+                        checkTopLevelListLength
                     );
                     differences.push(...nestedDiffs);
                 }
@@ -514,7 +528,8 @@ compareStructures = function(
                                         checkType,
                                         excludeFields,
                                         deepDiffContrastConfig,
-                                        openLog
+                                        openLog,
+                                        checkTopLevelListLength
                                     );
                                     differences.push(...nestedDiffs);
                                     currentUnmatchedMatched.add(j);
@@ -571,7 +586,8 @@ compareStructures = function(
                         checkType,
                         excludeFields,
                         deepDiffContrastConfig,
-                        openLog
+                        openLog,
+                        checkTopLevelListLength
                     );
                     differences.push(...nestedDiffs);
                 } else if (isObject(originItem) || isObject(currentItem)) {
@@ -662,7 +678,8 @@ compareStructures = function(
                         checkType,
                         excludeFields,
                         deepDiffContrastConfig,
-                        openLog
+                        openLog,
+                        checkTopLevelListLength
                     );
                     differences.push(...nestedDiffs);
                 } else {
@@ -1251,7 +1268,8 @@ compareStructures = function(
             excludeFields,
             deepDiffContrastConfig,
             differences,
-            openLog
+            openLog,
+            checkTopLevelListLength
         );
     } else if (isArray(originDataCopy) && isArray(currentDataCopy)) {
         return compareLists(
@@ -1265,7 +1283,8 @@ compareStructures = function(
             excludeFields,
             deepDiffContrastConfig,
             differences,
-            openLog
+            openLog,
+            checkTopLevelListLength
         );
     } else {
         // originData和currentData类型不一致
@@ -1300,6 +1319,7 @@ compareStructures = function(
  * @param {Set<string>|Array<string>|null} [options.excludeFields=null] - 排除字段白名单
  * @param {Object|null} [options.deepDiffContrastConfig=null] - 对比配置参数
  * @param {boolean} [options.openLog=false] - 开启日志
+ * @param {boolean} [options.checkTopLevelListLength=false] - checkValue 为 false 时是否检查根列表长度
  * @returns {Array<string>} 差异列表
  */
 compareStructuresWithOptions = function(originData, currentData, options = {}) {
@@ -1313,7 +1333,8 @@ compareStructuresWithOptions = function(originData, currentData, options = {}) {
         options.checkType !== undefined ? options.checkType : true,
         options.excludeFields !== undefined ? options.excludeFields : null,
         options.deepDiffContrastConfig !== undefined ? options.deepDiffContrastConfig : null,
-        options.openLog !== undefined ? options.openLog : false
+        options.openLog !== undefined ? options.openLog : false,
+        options.checkTopLevelListLength !== undefined ? options.checkTopLevelListLength : false
     );
 }
 
